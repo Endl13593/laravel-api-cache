@@ -1,0 +1,80 @@
+version: '3.7'
+
+services:
+    # image api_cache
+    api_cache:
+        build:
+            args:
+                user: eduardo
+                uid: 1000
+            context: ./
+            dockerfile: Dockerfile
+        image: laravel-app
+        restart: unless-stopped
+        working_dir: /var/www/
+        volumes:
+            - ./:/var/www
+        depends_on:
+            -   redis
+            -   queue
+        networks:
+            - api_cache
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+
+    # nginx
+    nginx:
+        image: nginx:alpine
+        restart: unless-stopped
+        ports:
+            - "8989:80"
+        volumes:
+            - ./:/var/www
+            - ./docker/nginx/:/etc/nginx/conf.d/
+        networks:
+            - api_cache
+
+    # mysql api_cache
+    db_api_cache:
+        image: mysql:5.7.22
+        restart: unless-stopped
+        environment:
+            MYSQL_DATABASE: ${DB_DATABASE}
+            MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+            MYSQL_PASSWORD: ${DB_PASSWORD}
+            MYSQL_USER: ${DB_USERNAME}
+        volumes:
+            - ./.docker/mysql/dbdata:/var/lib/mysql
+        ports:
+            - "3310:3306"
+        networks:
+            - api_cache
+
+    # queue
+    queue:
+        build:
+            args:
+                user: eduardo
+                uid: 1000
+            context: ./
+            dockerfile: Dockerfile
+        command: 'php artisan queue:work'
+        restart: unless-stopped
+        volumes:
+            - ./:/var/www
+        depends_on:
+            - redis
+        networks:
+            - api_cache
+
+    # redis
+    redis:
+        image: redis:latest
+        ports:
+            - "6378:6379"
+        networks:
+            - api_cache
+
+networks:
+    api_cache:
+        driver: bridge
